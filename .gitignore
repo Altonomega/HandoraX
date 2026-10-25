@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 # Downloaded on first run, not committed (several MB binary).
 models/
+# Per-user calibration, created on first run.
+calibration.json

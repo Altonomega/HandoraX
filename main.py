@@ -4,18 +4,33 @@ Usage:
     python main.py [--debug] [--model PATH] [--camera INDEX]
     python main.py --check     # verify mediapipe + model without a camera
 
+Calibration runs on first start and is saved to calibration.json:
+  phase 1 (open hand, 3s) finds the palm centre;
+  phase 2 (free movement, 5s) measures your comfortable hand range and
+  maps THAT zone onto the full screen -- a small, relaxed movement
+  covers every pixel, and your hand never needs to leave the frame.
+A saved calibration is reused on later runs; --recalibrate or the 'c'
+key runs it again.
+
 Keys while running:
     q  quit
     p  pause / resume (same as the thumbs-up gesture)
+    c  recalibrate
 """
 
 import argparse
+import json
+import os
 import sys
 import time
 
-from config import CALIBRATION_SECONDS
+from config import (
+    CALIBRATION_FILE,
+    CALIBRATION_SECONDS,
+    RANGE_CALIBRATION_SECONDS,
+)
 from gesture_recognizer import GestureRecognizer
-from hand_detector import HandDetector, ensure_model
+from hand_detector import HandDetector
 from system_controller import SystemController
 
 GESTURE_HELP = (
@@ -38,7 +53,78 @@ def parse_args(argv=None):
                         help="webcam index (default: 0)")
     parser.add_argument("--check", action="store_true",
                         help="verify mediapipe import and model file, then exit")
+    parser.add_argument("--recalibrate", action="store_true",
+                        help="ignore any saved calibration and recalibrate")
     return parser.parse_args(argv)
+
+
+def load_calibration(recognizer, path=CALIBRATION_FILE):
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            recognizer.apply_calibration(json.load(fh))
+    except (OSError, ValueError) as exc:
+        print(f"Ignoring unreadable calibration {path}: {exc}")
+        return False
+    print(f"Loaded saved calibration from {path} "
+          f"(zone {tuple(round(v, 2) for v in recognizer.zone)}). "
+          "Press 'c' to recalibrate.")
+    return True
+
+
+def save_calibration(recognizer, path=CALIBRATION_FILE):
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(recognizer.calibration_dict(), fh, indent=2)
+    print(f"Calibration saved to {path}.")
+
+
+def run_calibration(cap, hand_detector, recognizer):
+    """Two-phase calibration. Returns False if the user quit with 'q'."""
+    import cv2
+
+    print("Calibration phase 1: hold your hand open for "
+          f"{CALIBRATION_SECONDS:.0f} seconds.")
+    recognizer.reset_calibration()
+    start_time = time.time()
+    while time.time() - start_time < CALIBRATION_SECONDS:
+        ret, frame = cap.read()
+        if not ret:
+            print("Failed to capture frame during calibration.")
+            break
+        hands = hand_detector.detect(frame)
+        if hands:
+            recognizer.calibrate(hands)
+        cv2.imshow("HandoraX - Calibration", frame)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            return False
+
+    print("Calibration phase 2: move your hand around your COMFORTABLE "
+          "range -- as far as feels relaxed, no further -- for "
+          f"{RANGE_CALIBRATION_SECONDS:.0f} seconds. This range will "
+          "cover the whole screen.")
+    recognizer.begin_range_calibration()
+    start_time = time.time()
+    while time.time() - start_time < RANGE_CALIBRATION_SECONDS:
+        ret, frame = cap.read()
+        if not ret:
+            print("Failed to capture frame during calibration.")
+            break
+        hands = hand_detector.detect(frame)
+        if hands:
+            recognizer.add_range_sample(hands)
+        cv2.imshow("HandoraX - Calibration", frame)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            return False
+
+    if recognizer.finish_range_calibration():
+        save_calibration(recognizer)
+    else:
+        print("Range calibration had too few samples; keeping the "
+              "previous zone.")
+    cv2.destroyWindow("HandoraX - Calibration")
+    print("Calibration done!")
+    return True
 
 
 def main(argv=None):
@@ -69,23 +155,15 @@ def main(argv=None):
         print(f"Cannot open camera {args.camera}. Is a webcam connected?")
         return 1
 
-    print("Calibration... hold your hand open for "
-          f"{CALIBRATION_SECONDS:.0f} seconds.")
-    start_time = time.time()
     try:
-        while time.time() - start_time < CALIBRATION_SECONDS:
-            ret, frame = cap.read()
-            if not ret:
-                print("Failed to capture frame during calibration.")
-                break
-            hands = hand_detector.detect(frame)
-            if hands:
-                recognizer.calibrate(hands)
-            cv2.imshow("HandoraX - Calibration", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+        calibrated = (
+            not args.recalibrate and load_calibration(recognizer)
+        )
+        if not calibrated:
+            if not run_calibration(cap, hand_detector, recognizer):
                 return 0
 
-        print(f"Calibration done! {GESTURE_HELP}")
+        print(f"Starting! {GESTURE_HELP}")
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -93,10 +171,7 @@ def main(argv=None):
                 break
 
             hands = hand_detector.detect(frame)
-            if hands:
-                gesture_data = recognizer.recognize(hands)
-            else:
-                gesture_data = recognizer.recognize([])
+            gesture_data = recognizer.recognize(hands or [])
             controller.execute(gesture_data)
 
             label = gesture_data["gesture"]
@@ -111,6 +186,11 @@ def main(argv=None):
             if key == ord("p"):
                 paused = recognizer.toggle_pause()
                 print(f"Paused: {paused}")
+            if key == ord("c"):
+                print("Recalibrating...")
+                if not run_calibration(cap, hand_detector, recognizer):
+                    break
+                print(f"Resuming! {GESTURE_HELP}")
     finally:
         cap.release()
         cv2.destroyAllWindows()

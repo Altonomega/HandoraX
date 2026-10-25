@@ -9,6 +9,9 @@ Changes vs. the original:
   - "pause_toggle" / "paused" / "pinch" are explicitly no-ops here:
     pausing must never move the mouse, and a pending pinch must not
     click until it becomes a hold.
+  - Positions arriving here are already screen-normalized (and
+    mirrored) by the recognizer's active-zone mapping, so the
+    controller only scales by screen size. It must not mirror again.
 """
 
 import time
@@ -83,7 +86,9 @@ class SystemController:
             return
 
         screen_width, screen_height = pyautogui.size()
-        raw_x = (1 - palm_x) * screen_width
+        # Position is already screen-normalized (0..1) and mirrored by
+        # the recognizer's active-zone mapping.
+        raw_x = palm_x * screen_width
         raw_y = palm_y * screen_height
         raw_x = max(0, min(raw_x, screen_width - 1))
         raw_y = max(0, min(raw_y, screen_height - 1))

@@ -32,13 +32,30 @@ python main.py
 
 On first run the hand landmarker model (~8 MB) is downloaded
 automatically from Google's official model store into `models/` (not
-committed to the repo). Hold your hand open for 3 seconds to calibrate.
+committed to the repo).
 
 Verify your setup without a camera:
 
 ```bash
 python main.py --check
 ```
+
+## Calibration: a comfortable range covers the whole screen
+
+Mapping the whole camera frame 1:1 onto the screen is tiring: your
+hand has to cross the entire frame (and often leaves it) to cross the
+screen. HandoraX calibrates instead:
+
+1. **Phase 1 (3s):** hold your hand open — this finds the palm centre.
+2. **Phase 2 (5s):** move your hand around your *comfortable* range —
+   as far as feels relaxed, no further. That range is stretched onto
+   the full screen, so a small, relaxed movement reaches every pixel
+   and your hand never needs to leave the frame. Positions outside the
+   range clamp to the screen edge instead of getting lost.
+
+The result is saved to `calibration.json` and reused on later runs.
+Recalibrate any time with the `c` key or `python main.py
+--recalibrate` — for example if you move the camera or switch chairs.
 
 ## Supported Gestures
 
@@ -56,8 +73,8 @@ python main.py --check
 | **Ring to Thumb** | Go Forward | Pinch ring finger to thumb (e.g., browser forward). |
 | **Thumbs-Up** | Pause / Resume | Toggle control on and off. |
 
-Keys while running: `q` quits, `p` pauses/resumes, `--debug` logs
-every recognized gesture.
+Keys while running: `q` quits, `p` pauses/resumes, `c`
+recalibrates, `--debug` logs every recognized gesture.
 
 ## How It Works
 
@@ -89,6 +106,10 @@ Fine-tune HandoraX by editing `config.py`:
   *Default: 0.3*
 - **`PAUSE_DEBOUNCE_SECONDS`**: Minimum gap between pause toggles.
   *Default: 1.0*
+- **`RANGE_CALIBRATION_SECONDS`**: Phase-2 calibration duration.
+  *Default: 5.0*
+- **`ZONE_MIN_SIZE`**: Smallest allowed active-zone size per axis.
+  *Default: 0.2*
 
 ## Tests
 
@@ -116,6 +137,18 @@ python3 -m unittest discover -s tests -v
   in `config.py` for a smoother ride.
 
 ## Changelog
+
+### Calibration & optimization (2026-10-25)
+
+- Two-phase calibration: the user's comfortable hand range is measured
+  and mapped onto the full screen, so relaxed hand movements reach
+  every pixel before the hand leaves the frame. Outlier trimming
+  (2nd/98th percentiles), a margin, and a minimum zone size keep the
+  mapping stable; positions outside the zone clamp to the edge.
+- Calibration persists in `calibration.json`; `c` or `--recalibrate`
+  redo it.
+- 8 new unit tests for zone mapping, clamping, trimming, and
+  persistence (23 total, all green).
 
 ### Revival (2026-10-25)
 
