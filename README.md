@@ -1,103 +1,138 @@
 # HandoraX
-A cutting-edge hand gesture control system developed by **NexoraX**.
-
 
 *Control your PC with the power of your hands!*
 
-## Overview
-HandoraX is an innovative application that transforms your webcam into a gesture-based controller. Say goodbye to traditional mouse and keyboard inputs—navigate, click, drag, scroll, and zoom using intuitive hand gestures. Built with Python, OpenCV, and MediaPipe, this project showcases the future of human-computer interaction.
+HandoraX turns your webcam into a gesture-based controller: navigate,
+click, drag, scroll, and zoom using intuitive hand gestures. Built with
+Python, OpenCV, and MediaPipe (Tasks HandLandmarker).
 
 ## Features
+
 - **Cursor Control**: Move your cursor with an open hand.
-- **Click & Hold**: Tap or hold your index finger to your thumb for clicks or dragging.
-- **Multi-Gesture Support**: From right-clicks to zooming, all with simple hand movements.
-- **Customizable**: Adjust sensitivity and gesture mappings in `config.py`.
-- **Real-Time**: Smooth and responsive tracking powered by MediaPipe.
+- **Click & Hold**: Tap index to thumb for a click, hold (>0.3s) to drag.
+- **Multi-Gesture Support**: Right-click, double-click, drag, select,
+  scroll, zoom, browser back/forward — all with simple hand movements.
+- **Pause gesture**: Thumbs-up (or the `p` key) pauses and resumes
+  control, so a hand in frame doesn't move your mouse when you don't
+  want it to.
+- **Customizable**: All thresholds live in `config.py`.
+- **Real-Time**: Smooth tracking powered by MediaPipe, with cursor
+  smoothing and per-frame movement (no more 5 Hz choppiness).
 
 ## Installation
-Follow these steps to get HandoraX running on your machine:
 
-1. **Prerequisites**:
-   - Python 3.12 or higher
-   - A webcam
+Prerequisites: Python 3.10+ and a webcam.
 
-2. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/MNSH-Nexo/HandoraX.git
-   cd HandoraX
+```bash
+git clone https://github.com/MNSH-Nexo/HandoraX.git
+cd HandoraX
+pip install -r requirements.txt
+python main.py
+```
 
-3. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-4. **Run the Program**:
-   ```bash
-   python main.py
-On first run, hold your hand open for 3 seconds to calibrate.
+On first run the hand landmarker model (~8 MB) is downloaded
+automatically from Google's official model store into `models/` (not
+committed to the repo). Hold your hand open for 3 seconds to calibrate.
 
-Supported Gestures
-HandoraX recognizes the following gestures:
+Verify your setup without a camera:
+
+```bash
+python main.py --check
+```
 
 ## Supported Gestures
-HandoraX recognizes the following gestures:
-| Gesture                | Action                     | Description                              |
-|------------------------|----------------------------|------------------------------------------|
-| **Open Hand**          | Move Cursor               | Move your hand to control the cursor.    |
-| **Index to Thumb**     | Click / Hold              | Quick tap for click, hold (>0.3s) to drag/select. |
-| **Two Fingers to Thumb** | Right Click             | Pinch index and middle fingers to thumb. |
-| **Three Fingers to Thumb** | Double Click          | Pinch index, middle, and ring to thumb.  |
-| **Full Fist**          | Drag                      | Close your fist to drag items.           |
-| **Fist with Index Out** | Select Text              | Fist with only index extended.           |
-| **Middle to Thumb**    | Scroll                    | Pinch middle finger to thumb and move up/down. |
-| **Two Hands**          | Zoom                      | Adjust distance between hands to zoom in/out. |
-| **Pinky to Thumb**     | Go Back                   | Pinch pinky to thumb (e.g., browser back). |
-| **Ring to Thumb**      | Go Forward                | Pinch ring finger to thumb (e.g., browser forward). |
+
+| Gesture | Action | Description |
+| --- | --- | --- |
+| **Open Hand** | Move Cursor | Move your hand to control the cursor. |
+| **Index to Thumb** | Click / Hold | Quick tap for click, hold (>0.3s) to drag. |
+| **Two Fingers to Thumb** | Right Click | Pinch index and middle fingers to thumb. |
+| **Three Fingers to Thumb** | Double Click | Pinch index, middle, and ring to thumb. |
+| **Full Fist** | Drag | Close your fist to drag items. |
+| **Fist with Index Out** | Select Text | Fist with only index extended. |
+| **Middle to Thumb** | Scroll | Pinch middle finger to thumb and move up/down. |
+| **Two Hands** | Zoom | Adjust distance between hands to zoom in/out. |
+| **Pinky to Thumb** | Go Back | Pinch pinky to thumb (e.g., browser back). |
+| **Ring to Thumb** | Go Forward | Pinch ring finger to thumb (e.g., browser forward). |
+| **Thumbs-Up** | Pause / Resume | Toggle control on and off. |
+
+Keys while running: `q` quits, `p` pauses/resumes, `--debug` logs
+every recognized gesture.
 
 ## How It Works
-HandoraX brings gesture control to life through a seamless three-step process:
 
-- **Hand Detection**: Powered by MediaPipe, HandoraX tracks hand landmarks in real-time with precision, ensuring smooth and accurate detection.
-- **Gesture Recognition**: By analyzing finger positions and distances, the system intelligently identifies your gestures, from simple clicks to complex zooms.
-- **System Control**: Using PyAutoGUI, HandoraX translates your gestures into mouse and keyboard actions, giving you full control without touching a device.
+Three stages, kept in separate modules:
+
+- **Hand Detection** (`hand_detector.py`): MediaPipe Tasks
+  HandLandmarker tracks 21 landmarks per hand in real time.
+- **Gesture Recognition** (`gesture_recognizer.py`): Pure logic over
+  landmark geometry — no camera, no MediaPipe, no GUI. Pinch thresholds
+  scale with the hand's own size (so distance from the camera doesn't
+  change behaviour), finger extension is orientation-independent, and
+  gestures are checked most-specific-first so a fist can't read as a
+  click and a three-finger pinch can't be swallowed by the two-finger
+  check.
+- **System Control** (`system_controller.py`): Translates gestures
+  into mouse/keyboard actions via PyAutoGUI, with smoothing for
+  continuous motion and a cooldown for discrete actions.
 
 ## Configuration
-Fine-tune HandoraX to suit your preferences by editing `config.py`:
 
-- **`MOUSE_SENSITIVITY`**: Adjusts cursor movement speed. *Default: 0.3*
-- **`SCROLL_SPEED`**: Controls scroll sensitivity. *Default: 10*
-- **`ZOOM_SPEED`**: Sets zoom sensitivity. *Default: 5*
+Fine-tune HandoraX by editing `config.py`:
 
-Experiment with these settings to optimize your experience!
+- **`MOUSE_SENSITIVITY`**: Cursor smoothing factor. *Default: 0.3*
+- **`SCROLL_SPEED`**: Scroll sensitivity. *Default: 10*
+- **`ZOOM_SPEED`**: Zoom sensitivity. *Default: 5*
+- **`PINCH_RATIO`**: Pinch threshold as a fraction of hand size.
+  *Default: 0.35*
+- **`CLICK_HOLD_SECONDS`**: Pinch duration that becomes a hold.
+  *Default: 0.3*
+- **`PAUSE_DEBOUNCE_SECONDS`**: Minimum gap between pause toggles.
+  *Default: 1.0*
 
-## Requirements
-To run HandoraX, you'll need the following libraries:
-- **`opencv-python`**: Handles webcam input and image processing.
-- **`mediapipe`**: Enables advanced hand tracking.
-- **`pyautogui`**: Facilitates system-level control.
+## Tests
 
-- **Install them easily with this command:**:
-   ```bash
-   pip install opencv-python mediapipe pyautogui
+The gesture logic is covered by unit tests with synthetic landmarks —
+no camera or display needed:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ## Troubleshooting
-Running into a snag? Don’t worry—we’ve got you covered with these simple solutions:
 
-- **Webcam Not Responding?**  
-  Double-check that your webcam is plugged in and free from other apps stealing its focus.
-- **Gestures Not Registering?**  
-  Make sure your lighting is bright and your hand stays in the frame during calibration.
-- **Experiencing Lag?**  
-  Lower your webcam resolution or fine-tune the sensitivity settings in `config.py` for a smoother ride.
+- **Webcam Not Responding?**
+  Double-check that your webcam is plugged in and free from other apps
+  stealing its focus. Try another index: `python main.py --camera 1`.
+- **Gestures Not Registering?**
+  Make sure your lighting is bright and your hand stays in the frame
+  during calibration.
+- **Model download fails?**
+  Check your connection, or download
+  `hand_landmarker.task` manually into `models/` (see `MODEL_URL` in
+  `config.py`).
+- **Experiencing Lag?**
+  Lower your webcam resolution or fine-tune the sensitivity settings
+  in `config.py` for a smoother ride.
 
-## Contributing
-Love HandoraX? Join us in shaping its future! Here’s how you can contribute:
-1. **Fork the Repo**: Grab your own copy from GitHub.
-2. **Add Your Magic**: Implement your ideas or fixes.
-3. **Submit a Pull Request**: Share your work with us!  
-Together, we can elevate HandoraX to new heights your input matters!
+## Changelog
 
-## Team
-Crafted with pride by **NexoraX** a visionary team fueled by a passion for innovation and a mission to redefine how we interact with technology.
+### Revival (2026-10-25)
+
+- Migrated from the deprecated `mp.solutions.hands` API to the
+  MediaPipe Tasks HandLandmarker, with automatic model download.
+- Fixed double-click being unreachable (two-finger check shadowed the
+  three-finger check) and fists misreading as clicks.
+- Pinch thresholds now scale with hand size; finger detection no
+  longer assumes an upright hand.
+- Clicks fire exactly once per tap (previously a held pinch could
+  repeat-click); cursor movement is no longer gated to 5 Hz.
+- Added the thumbs-up pause gesture and `p` key; removed the
+  constructor's surprise mouse movement and the unused `eye_tracker`
+  module.
+- Pinned dependency ranges; added 15 unit tests for the gesture logic.
 
 ## License
-HandoraX is released under the [MIT License](LICENSE). Feel free to use and adapt it, just keep the credit where it’s due!
 
+HandoraX is released under the [MIT License](LICENSE). Feel free to
+use and adapt it, just keep the credit where it's due!

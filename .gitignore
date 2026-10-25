@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+# Downloaded on first run, not committed (several MB binary).
+models/
