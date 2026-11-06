@@ -24,7 +24,7 @@ Python, OpenCV, and MediaPipe (Tasks HandLandmarker).
 Prerequisites: Python 3.10+ and a webcam.
 
 ```bash
-git clone https://github.com/MNSH-Nexo/HandoraX.git
+git clone https://github.com/Altonomega/HandoraX.git
 cd HandoraX
 pip install -r requirements.txt
 python main.py
